@@ -1,5 +1,5 @@
 type Message = {
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "system";
   content: string;
 };
 
@@ -11,11 +11,10 @@ export default function ChatPreview({ messages }: { messages: Message[] }) {
         {messages.map((message, idx) => (
           <div
             key={`${message.role}-${idx}`}
-            className={`max-w-[85%] rounded-xl px-4 py-3 text-sm ${
-              message.role === "user"
+            className={`max-w-[85%] rounded-xl px-4 py-3 text-sm ${message.role === "user"
                 ? "ml-auto bg-indigo-500/20 text-indigo-100"
                 : "bg-slate-800 text-slate-100"
-            }`}
+              }`}
           >
             {message.content.includes("```") ? (
               <pre className="overflow-x-auto rounded bg-black/40 p-2 text-xs">{message.content}</pre>
