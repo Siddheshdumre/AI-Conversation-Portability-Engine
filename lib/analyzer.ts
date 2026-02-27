@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { StructuredMemory } from "./extractor";
 
 export type ConversationAnalysis = {
@@ -8,47 +8,54 @@ export type ConversationAnalysis = {
 };
 
 export async function generateAnalysis(memory: StructuredMemory): Promise<ConversationAnalysis> {
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
         return buildFallbackAnalysis(memory);
     }
 
-    const client = new OpenAI({ apiKey });
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     const memoryText = JSON.stringify(memory, null, 2);
 
     try {
-        const response = await client.chat.completions.create({
-            model: "gpt-4o-mini",
-            response_format: { type: "json_object" },
-            messages: [
-                {
-                    role: "system",
-                    content: `You are a technical analyst. Given structured conversation memory, produce three analysis outputs.
+        const result = await model.generateContent({
+            contents: [{
+                role: "user",
+                parts: [{
+                    text: `You are a technical analyst. Given structured conversation memory, produce three analysis outputs.
 Return JSON with exactly these keys:
 - summary: string (2-3 sentence executive summary, plain English)
 - detailed: string (3-5 paragraph detailed analysis of what was discussed, decisions made, and why they matter)
-- keyPoints: string[] (5-8 bullet point key takeaways)`,
-                },
-                {
-                    role: "user",
-                    content: `Generate analysis from this structured conversation memory:\n\n${memoryText}`,
-                },
-            ],
-            max_tokens: 1500,
-            temperature: 0.3,
+- keyPoints: string[] (5-8 bullet point key takeaways)
+
+Generate analysis from this structured conversation memory:\n\n${memoryText}`
+                }]
+            }],
+            generationConfig: {
+                responseMimeType: "application/json",
+                temperature: 0.3,
+            }
         });
 
-        const content = response.choices[0]?.message?.content;
+        const content = result.response.text();
         if (!content) return buildFallbackAnalysis(memory);
 
-        const parsed = JSON.parse(content) as Partial<ConversationAnalysis>;
+        let cleanContent = content.trim();
+        if (cleanContent.startsWith("\`\`\`json")) {
+            cleanContent = cleanContent.replace(/^\`\`\`json\s*/, "").replace(/\s*\`\`\`$/, "");
+        } else if (cleanContent.startsWith("\`\`\`")) {
+            cleanContent = cleanContent.replace(/^\`\`\`\s*/, "").replace(/\s*\`\`\`$/, "");
+        }
+
+        const parsed = JSON.parse(cleanContent) as Partial<ConversationAnalysis>;
         return {
             summary: parsed.summary ?? buildFallbackAnalysis(memory).summary,
             detailed: parsed.detailed ?? buildFallbackAnalysis(memory).detailed,
-            keyPoints: parsed.keyPoints ?? buildFallbackAnalysis(memory).keyPoints,
+            keyPoints: Array.isArray(parsed.keyPoints) ? parsed.keyPoints : buildFallbackAnalysis(memory).keyPoints,
         };
-    } catch {
+    } catch (err) {
+        console.error("[analyzer] AI Analysis error:", err);
         return buildFallbackAnalysis(memory);
     }
 }
