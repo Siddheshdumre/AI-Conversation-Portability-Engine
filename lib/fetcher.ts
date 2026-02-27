@@ -71,15 +71,20 @@ async function tryChatGPTApi(shareId: string): Promise<Message[] | null> {
 
     try {
         // Determine the Chrome executable path based on environment
-        const executablePath = process.env.NODE_ENV === "development" || process.platform === "win32"
+        const isLocal = process.env.NODE_ENV === "development" || process.platform === "win32";
+
+        // Vercel deployment requires a precompiled Chromium binary due to serverless limits
+        const executablePath = isLocal
             ? "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
-            : await chromium.executablePath();
+            : await chromium.executablePath(
+                "https://github.com/Sparticuz/chromium/releases/download/v122.0.0/chromium-v122.0.0-pack.tar"
+            );
 
         browser = await puppeteer.launch({
             args: [...chromium.args, "--no-sandbox", "--disable-setuid-sandbox"],
             defaultViewport: { width: 1920, height: 1080 },
             executablePath,
-            headless: true, // Run in headless mode
+            headless: true,
         });
 
         const page = await browser.newPage();
