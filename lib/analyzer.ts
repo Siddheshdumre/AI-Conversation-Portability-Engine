@@ -23,21 +23,22 @@ export async function generateAnalysis(memory: StructuredMemory): Promise<Conver
             messages: [
                 {
                     role: "system",
-                    content: "You are a technical analyst. Return only valid JSON with no markdown wrapping.",
+                    content: "You are a Senior Technical Analyst. Return only valid JSON with no markdown wrapping.",
                 },
                 {
                     role: "user",
-                    content: `Given structured conversation memory, produce three analysis outputs.
-Return JSON with exactly these keys:
-- summary: string (2-3 sentence executive summary, plain English)
-- detailed: string (3-5 paragraph detailed analysis of what was discussed, decisions made, and why they matter)
-- keyPoints: string[] (5-8 bullet point key takeaways)
+                    content: `Given structured conversation memory, produce three highly detailed analysis outputs. Your goal is maximum context retention. Do not produce quick summaries; provide extensive, comprehensive breakdowns.
+Return JSON with exactly these keys IN THIS ORDER:
+- _scratchpad: string (First, write 2-4 sentences of deep reasoning about the core narrative and technical depth of the conversation. Determine every important detail that must be preserved.)
+- summary: string (A comprehensive, detailed executive summary paragraph capturing the full scope of the conversation)
+- detailed: string (A massive, long-form detailed analysis of everything that was discussed, every decision made, and the complete context of why they matter. Do not miss any context. Write fluidly and professionally.)
+- keyPoints: string[] (10-20 highly detailed bullet point key takeaways, focusing on deep technical details, constraints, code architecture, and specific facts established)
 
-Generate analysis from this structured conversation memory:\n\n${memoryText}`,
+Generate highly detailed analysis from this structured conversation memory:\n\n${memoryText}`,
                 },
             ],
             response_format: { type: "json_object" },
-            temperature: 0.3,
+            temperature: 0.4,
         });
 
         const content = response.choices[0]?.message?.content ?? null;

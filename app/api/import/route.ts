@@ -6,6 +6,11 @@ import { compressForExport } from "@/lib/compressor";
 import { estimateMessagesTokens } from "@/lib/tokenizer";
 import { getConversationStats } from "@/lib/chunker";
 
+// Vercel hobby plan max is 60s. We need this because Puppeteer + Groq takes ~20s.
+// Without this, Vercel will kill the request after 10s or 15s and return a 504.
+export const maxDuration = 60;
+export const dynamic = "force-dynamic";
+
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json() as { url?: string };

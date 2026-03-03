@@ -56,17 +56,19 @@ const FALLBACK_MEMORY: StructuredMemory = {
     ],
 };
 
-const EXTRACTION_SYSTEM_PROMPT = `You are an AI conversation memory extraction engine.
-Extract structured memory from this conversation segment without losing important context.
-Return a JSON object with EXACTLY these keys:
-- overview: string (1-2 sentence summary of what THIS SEGMENT covers)
-- topics: string[] (main topics discussed in this segment)
-- decisions: string[] (key decisions made)
-- important_points: string[] (important information, facts, or conclusions)
-- code_references: string[] (files, functions, APIs, or technical artifacts mentioned)
-- assumptions: string[] (assumptions made during the conversation)
-- unresolved_questions: string[] (open questions or unresolved items)
-- action_items: string[] (concrete next steps or tasks mentioned)
+const EXTRACTION_SYSTEM_PROMPT = `You are a Senior Staff Engineer extracting highly accurate, structured memory from a technical conversation.
+Extract memory from this conversation segment. Your primary goal is maximum detail and comprehensive context retention. Do not miss any context.
+Return a JSON object with EXACTLY these keys IN THIS ORDER:
+- _scratchpad: string (First, write 3-5 sentences of deep reasoning about the core technical themes, decisions, and overall context. This helps you structure the rest of the output.)
+- overview: string (A comprehensive, detailed summary paragraph of what THIS SEGMENT covers. Include as much context as possible.)
+- topics: string[] (Verbose, detailed descriptions of topics, frameworks, or concepts discussed)
+- decisions: string[] (Detailed explanations of concrete decisions made, including the "why", e.g., "Chose Next.js over Vite because...")
+- important_points: string[] (Extensive list of crucial facts, constraints, edge cases, or architectural conclusions. Do not skip details.)
+- code_references: string[] (Specific files, functions, APIs, DB schemas, or code snippets mentioned, along with their purpose)
+- assumptions: string[] (Detailed implicit or explicit assumptions made by the speakers)
+- unresolved_questions: string[] (Specific open questions, constraints, or unknowns that need answering later)
+- action_items: string[] (Detailed concrete next steps assigning work or tasks, including expected outcomes)
+
 Respond ONLY with valid JSON. Do not wrap in markdown code blocks.`;
 
 function getGroqClient(): Groq {
@@ -113,7 +115,7 @@ async function extractSinglePass(messages: Message[], client: Groq): Promise<Str
                 { role: "user", content: `Extract memory from this conversation:\n\n${conversationText.slice(0, 200_000)}` },
             ],
             response_format: { type: "json_object" },
-            temperature: 0.2,
+            temperature: 0.1,
         });
 
         const responseText = response.choices[0]?.message?.content ?? null;
@@ -154,7 +156,7 @@ async function extractChunked(
                             { role: "user", content: `Extract memory from conversation segment ${chunk.index + 1}:\n\n${text.slice(0, 200_000)}` },
                         ],
                         response_format: { type: "json_object" },
-                        temperature: 0.2,
+                        temperature: 0.1,
                     });
 
                     const responseText = response.choices[0]?.message?.content ?? null;
@@ -171,10 +173,10 @@ async function extractChunked(
 
     if (chunkMemories.length === 0) return FALLBACK_MEMORY;
 
-    // Merge all chunk memories
-    const merged = useHierarchical
-        ? hierarchicalMerge(chunkMemories)
-        : mergeMemories(chunkMemories);
+    // Merge all chunk memories intelligently
+    const merged = await (useHierarchical
+        ? hierarchicalMerge(chunkMemories, client)
+        : mergeMemories(chunkMemories, client));
 
     // Augment code_references with real code block summaries from the full conversation
     const rawCodeBlocks = extractCodeBlocks(messages);
