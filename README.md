@@ -22,7 +22,7 @@ By ingesting the raw conversation and running it through a sophisticated Memory 
 Bypasses Cloudflare anti-scraping protections to silently extract the raw conversation graph (`__NEXT_DATA__` and Remix contexts) directly from a public ChatGPT share link using a pre-compiled Vercel-optimized Puppeteer/Chromium instance.
 
 ### 2. High-Fidelity Memory Extraction (`lib/extractor.ts`)
-Uses Google's **Gemini 2.5 Flash** (optimized for speed and massive context windows) to read the entire conversation and extract a strict JSON `StructuredMemory` schema containing:
+Uses **Groq (Llama 3.3 70B)** (optimized for deterministic JSON output and blistering speed) to read the entire conversation and extract a strict JSON `StructuredMemory` schema containing:
 *   **Overview**: Executive summary.
 *   **Topics**: Core themes discussed.
 *   **Decisions**: Immutable choices made during the chat.
@@ -37,6 +37,9 @@ Automatically runs a secondary regex-based parsing pass over the raw chat HTML t
 ### 4. Dynamic Token Compression (`lib/compressor.ts`)
 Features a 3-tier export system (Compact, Balanced, Detailed) that formats the extracted JSON into targeted prompts optimized specifically for the quirks of GPT, Claude, or Gemini system prompts. Includes a real-time token estimator to guarantee you never blow out a context window limits.
 
+### 5. Intelligent Chunk Synthesis (`lib/merger.ts`)
+For conversations exceeding 100k tokens, the engine chunks the conversation, extracts memory in parallel, and then uses a highly deterministic secondary LLM pass (Chain of Thought reasoning) to safely deduplicate and synthesize the arrays into a coherent master memory without losing unique technical details.
+
 ---
 
 ## 🏗️ Architecture
@@ -47,7 +50,7 @@ The project is built on the **Next.js 14 App Router** paradigm, leaning heavily 
 *   **Language:** TypeScript (Strict Mode)
 *   **Styling:** Tailwind CSS
 *   **Browser Automation:** Puppeteer Core + Sparticuz Chromium (Serverless-Ready)
-*   **AI Engine Layer:** `@google/generative-ai` (Gemini SDK)
+*   **AI Engine Layer:** `groq-sdk` (Llama 3.3 70B Versatile)
 *   **Parsing:** Cheerio (HTML), Custom AST regex tools
 *   **Hosting:** Optimized for Vercel Serverless Functions
 
@@ -55,7 +58,7 @@ The project is built on the **Next.js 14 App Router** paradigm, leaning heavily 
 1.  **Client Post:** User pastes a link into the UI.
 2.  **Serverless Scrape:** `/api/import` triggers headless Chromium to render the heavy React page and dump the JSON state.
 3.  **Token Analysis:** The engine evaluates token counts (`lib/tokenizer.ts`) to determine if the chat requires single-pass or chunked extraction.
-4.  **LLM Processing:** Gemini 2.5 Flash processes the messages against a strict JSON extraction schema.
+4.  **LLM Processing:** Groq's Llama 3.3 70B processes the messages against a strict JSON extraction schema using a structured reasoning scratchpad.
 5.  **Re-hydration:** The structured memory is passed back to the client where React renders the multi-tab analysis dashboard.
 
 ---
@@ -66,16 +69,16 @@ To run the Portability Engine locally on your machine, you need Node.js `v20` or
 
 ### 1. Clone & Install Dependencies
 ```bash
-git clone https://github.com/your-username/AI-Conversation-Portability-Engine.git
+git clone https://github.com/Siddheshdumre/AI-Conversation-Portability-Engine.git
 cd AI-Conversation-Portability-Engine
 npm install
 ```
 
 ### 2. Configure Environment Variables
-You need a free Google Gemini API key to run the extraction engine.
+You need a free Groq API key to run the extraction engine.
 Create a `.env.local` file in the root directory:
 ```env
-GEMINI_API_KEY=AIzaSyYourGeminiKeyHere...
+GROQ_API_KEY=gsk_your_groq_api_key_here...
 ```
 
 ### 3. Run the Development Server
@@ -92,10 +95,12 @@ This application is specifically architected to bypass Next.js Vercel Serverless
 
 1. Fork/Push this repository to your GitHub account.
 2. Import the project into the [Vercel Dashboard](https://vercel.com/new).
-3. Under **Environment Variables**, add `GEMINI_API_KEY`.
+3. Under **Environment Variables**, add \`GROQ_API_KEY\`.
 4. Deploy!
 
-*Note: The `@sparticuz/chromium` library is configured to dynamically download a pre-compiled Chromium tarball (`v122.0.0`) at runtime in `lib/fetcher.ts` to stay significantly under Vercel's 50MB Serverless Function execution limit.*
+*Notes for Vercel:*
+* *The `@sparticuz/chromium` library is configured to dynamically download a pre-compiled Chromium tarball (`v122.0.0`) at runtime in `lib/fetcher.ts` to stay significantly under Vercel's 50MB Serverless Function limits.*
+* *The `/api/import` route uses \`export const maxDuration = 60;\` specifically to prevent Vercel's default 10-second Hobby timeout from killing Puppeteer and Groq API calls prematurely.*
 
 ---
 
