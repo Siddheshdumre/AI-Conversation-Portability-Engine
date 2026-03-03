@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import Groq from "groq-sdk";
 import type { Message } from "./fetcher";
 import {
     chunkMessages,
@@ -66,51 +66,57 @@ Return a JSON object with EXACTLY these keys:
 - code_references: string[] (files, functions, APIs, or technical artifacts mentioned)
 - assumptions: string[] (assumptions made during the conversation)
 - unresolved_questions: string[] (open questions or unresolved items)
-- action_items: string[] (concrete next steps or tasks mentioned)`;
+- action_items: string[] (concrete next steps or tasks mentioned)
+Respond ONLY with valid JSON. Do not wrap in markdown code blocks.`;
+
+function getGroqClient(): Groq {
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) throw new Error("GROQ_API_KEY is not configured.");
+    return new Groq({ apiKey });
+}
 
 /**
  * Main entry point. Automatically routes to single or chunked extraction
  * depending on conversation size. Returns merged StructuredMemory.
  */
 export async function extractMemory(messages: Message[]): Promise<StructuredMemory> {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) return FALLBACK_MEMORY;
+    let client: Groq;
+    try {
+        client = getGroqClient();
+    } catch {
+        return FALLBACK_MEMORY;
+    }
 
     const { totalTokens, strategy } = getConversationStats(messages);
     console.log(`[extractor] ${messages.length} messages, ~${totalTokens} tokens, strategy: ${strategy}`);
 
     if (totalTokens <= LARGE_CHAT_THRESHOLD) {
         // Small conversation — single extraction call
-        return extractSinglePass(messages, apiKey);
+        return extractSinglePass(messages, client);
     }
 
     // Large conversation — chunked or hierarchical
-    return extractChunked(messages, apiKey, strategy === "hierarchical");
-}
-
-function getGeminiModel(apiKey: string) {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    // Use flash as it is extremely fast, cheap, and supports 1M+ tokens
-    return genAI.getGenerativeModel({ model: "gemini-2.5-flash", systemInstruction: EXTRACTION_SYSTEM_PROMPT });
+    return extractChunked(messages, client, strategy === "hierarchical");
 }
 
 /**
  * Extracts memory from a single chunk of conversation in one LLM call.
  */
-async function extractSinglePass(messages: Message[], apiKey: string): Promise<StructuredMemory> {
-    const model = getGeminiModel(apiKey);
+async function extractSinglePass(messages: Message[], client: Groq): Promise<StructuredMemory> {
     const conversationText = formatMessages(messages);
 
     try {
-        const result = await model.generateContent({
-            contents: [{ role: "user", parts: [{ text: `Extract memory from this conversation:\n\n${conversationText.slice(0, 100_000)}` }] }],
-            generationConfig: {
-                responseMimeType: "application/json",
-                temperature: 0.2,
-            }
+        const response = await client.chat.completions.create({
+            model: "llama-3.3-70b-versatile",
+            messages: [
+                { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
+                { role: "user", content: `Extract memory from this conversation:\n\n${conversationText.slice(0, 200_000)}` },
+            ],
+            response_format: { type: "json_object" },
+            temperature: 0.2,
         });
 
-        const responseText = result.response.text();
+        const responseText = response.choices[0]?.message?.content ?? null;
         return parseMemoryResponse(responseText);
     } catch (err) {
         console.error("[extractor] Single pass error:", err);
@@ -124,15 +130,14 @@ async function extractSinglePass(messages: Message[], apiKey: string): Promise<S
  */
 async function extractChunked(
     messages: Message[],
-    apiKey: string,
+    client: Groq,
     useHierarchical: boolean
 ): Promise<StructuredMemory> {
-    const model = getGeminiModel(apiKey);
     const chunks = chunkMessages(messages);
 
     console.log(`[extractor] Processing ${chunks.length} chunks (hierarchical: ${useHierarchical})`);
 
-    // Extract memory from all chunks in parallel (batched to avoid rate limits)
+    // Process chunks in batches of 5 (well within Groq's 30 RPM free limit)
     const BATCH_SIZE = 5;
     const chunkMemories: StructuredMemory[] = [];
 
@@ -142,15 +147,17 @@ async function extractChunked(
             batch.map(async (chunk) => {
                 const text = formatMessages(chunk.messages);
                 try {
-                    const result = await model.generateContent({
-                        contents: [{ role: "user", parts: [{ text: `Extract memory from conversation segment ${chunk.index + 1}:\n\n${text.slice(0, 100_000)}` }] }],
-                        generationConfig: {
-                            responseMimeType: "application/json",
-                            temperature: 0.2,
-                        }
+                    const response = await client.chat.completions.create({
+                        model: "llama-3.3-70b-versatile",
+                        messages: [
+                            { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
+                            { role: "user", content: `Extract memory from conversation segment ${chunk.index + 1}:\n\n${text.slice(0, 200_000)}` },
+                        ],
+                        response_format: { type: "json_object" },
+                        temperature: 0.2,
                     });
 
-                    const responseText = result.response.text();
+                    const responseText = response.choices[0]?.message?.content ?? null;
                     return parseMemoryResponse(responseText);
                 } catch (err) {
                     console.error(`[extractor] Chunk ${chunk.index} error:`, err);
@@ -200,12 +207,12 @@ function formatMessages(messages: Message[]): string {
 function parseMemoryResponse(content: string | undefined | null): StructuredMemory {
     if (!content) return FALLBACK_MEMORY;
     try {
-        // Strip markdown code block wrappers if Gemini ignored the MIME type directive
+        // Strip markdown code block wrappers just in case the model adds them
         let cleanContent = content.trim();
-        if (cleanContent.startsWith("\`\`\`json")) {
-            cleanContent = cleanContent.replace(/^\`\`\`json\s*/, "").replace(/\s*\`\`\`$/, "");
-        } else if (cleanContent.startsWith("\`\`\`")) {
-            cleanContent = cleanContent.replace(/^\`\`\`\s*/, "").replace(/\s*\`\`\`$/, "");
+        if (cleanContent.startsWith("```json")) {
+            cleanContent = cleanContent.replace(/^```json\s*/, "").replace(/\s*```$/, "");
+        } else if (cleanContent.startsWith("```")) {
+            cleanContent = cleanContent.replace(/^```\s*/, "").replace(/\s*```$/, "");
         }
 
         const parsed = JSON.parse(cleanContent) as Partial<StructuredMemory>;

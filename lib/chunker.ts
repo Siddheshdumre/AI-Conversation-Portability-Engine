@@ -1,9 +1,10 @@
 import type { Message } from "./fetcher";
 import { estimateTokens } from "./tokenizer";
 
-export const CHUNK_TOKEN_BUDGET = 8_000;  // tokens per chunk sent to OpenAI
-export const OVERLAP_MESSAGES = 5;       // messages shared between adjacent chunks
-export const LARGE_CHAT_THRESHOLD = 20_000; // tokens above which we use chunked path
+// Groq llama-3.3-70b supports 131k tokens — use large chunks to minimise API calls.
+export const CHUNK_TOKEN_BUDGET = 70_000;  // tokens per chunk (safe margin below 131k)
+export const OVERLAP_MESSAGES = 2;         // messages shared between adjacent chunks
+export const LARGE_CHAT_THRESHOLD = 100_000; // tokens above which we use chunked path
 
 export type MessageChunk = {
     index: number;
@@ -75,7 +76,7 @@ export function getConversationStats(messages: Message[]): {
     const isLarge = totalTokens > LARGE_CHAT_THRESHOLD;
 
     let strategy: "single" | "chunked" | "hierarchical" = "single";
-    if (totalTokens > 80_000) strategy = "hierarchical";
+    if (totalTokens > 500_000) strategy = "hierarchical";
     else if (totalTokens > LARGE_CHAT_THRESHOLD) strategy = "chunked";
 
     return { totalTokens, estimatedChunks, isLarge, strategy };
