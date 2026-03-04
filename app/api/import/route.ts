@@ -5,6 +5,8 @@ import { generateAnalysis } from "@/lib/analyzer";
 import { compressForExport } from "@/lib/compressor";
 import { estimateMessagesTokens } from "@/lib/tokenizer";
 import { getConversationStats } from "@/lib/chunker";
+import { auth } from "@/lib/auth";
+import { db } from "@/lib/db";
 
 // Vercel hobby plan max is 60s. We need this because Puppeteer + Groq takes ~20s.
 // Without this, Vercel will kill the request after 10s or 15s and return a 504.
@@ -65,6 +67,20 @@ export async function POST(request: NextRequest) {
 
         // Step 5: Build default export (Balanced, GPT)
         const exportText = compressForExport(memory, "GPT", "Balanced");
+
+        const session = await auth();
+        if (session?.user?.id) {
+            await db.chatImport.create({
+                data: {
+                    userId: session.user.id,
+                    url,
+                    title: memory.overview?.slice(0, 80) || new URL(url).hostname,
+                    tokenCount,
+                    memory: memory as any,
+                    analysis: analysis as any,
+                }
+            });
+        }
 
         return NextResponse.json({
             success: true,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useEffect } from "react";
 import Input from "@/components/Input";
 import Button from "@/components/Button";
 import LoadingSpinner from "@/components/LoadingSpinner";
@@ -17,9 +17,11 @@ export type Message = {
 };
 
 type ImportedChat = {
+  id?: string;
   title: string;
   url: string;
   tokenCount: number;
+  createdAt?: string;
 };
 
 const loadingSteps = [
@@ -45,6 +47,44 @@ export default function DashboardPage() {
   const [compressionLevel, setCompressionLevel] = useState("Balanced");
   const [toast, setToast] = useState(false);
   const [isDemoData, setIsDemoData] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/history")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.history) {
+          setImportedChats(data.history);
+        }
+      })
+      .catch((err) => console.error("Failed to load history", err));
+  }, []);
+
+  const loadChat = useCallback(async (id: string) => {
+    try {
+      setLoading(true);
+      setError(null);
+      setStepIndex(3);
+      const res = await fetch(`/api/history/${id}`);
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || "Failed to load chat");
+
+      const chat = data.chat;
+      setChatLink(chat.url);
+      setMemory(chat.memory);
+      setAnalysis(chat.analysis);
+      setTokenCount(chat.tokenCount);
+      // We don't save full messages array in DB to save space, only memory and analysis.
+      // So chat preview might be empty when loaded from history unless we re-fetch chunks.
+      // For now, we just clear messages to focus on analysis tabs.
+      setMessages([]);
+      setIsDemoData(false);
+      setActiveTab("Summary");
+    } catch (err: any) {
+      setError(err.message || "Failed to load chat data from history.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   const canImport = useMemo(() => /^https?:\/\/.+/.test(chatLink.trim()), [chatLink]);
 
@@ -94,9 +134,15 @@ export default function DashboardPage() {
       setIsDemoData(data.isDemoData ?? false);
 
       const title = data.memory?.overview?.slice(0, 48) ?? new URL(chatLink.trim()).hostname;
-      setImportedChats((prev) =>
-        [{ title, url: chatLink.trim(), tokenCount: data.tokenCount ?? 0 }, ...prev].slice(0, 7)
-      );
+
+      // Re-fetch history to get the newly created ID
+      fetch("/api/history")
+        .then((res) => res.json())
+        .then((d) => {
+          if (d.history) {
+            setImportedChats(d.history);
+          }
+        });
       setActiveTab("Summary");
     } catch {
       setError("Network error. Please check your connection and try again.");
@@ -116,7 +162,7 @@ export default function DashboardPage() {
   return (
     <main className="h-screen p-4 md:p-6">
       <div className="grid h-full grid-cols-1 gap-4 lg:grid-cols-[260px_1fr_420px]">
-        <Sidebar importedChats={importedChats} />
+        <Sidebar importedChats={importedChats} onSelectChat={loadChat} />
 
         <section className="space-y-4 overflow-hidden">
           <div className="card p-4">
