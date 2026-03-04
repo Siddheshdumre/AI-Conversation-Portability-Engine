@@ -83,7 +83,7 @@ export default function Sidebar({ importedChats, onSelectChat }: SidebarProps) {
       </div>
 
       {/* Footer */}
-      <div className="pt-3 text-sm" style={{ borderTop: "1px solid var(--surface-border)" }}>
+      <div className="pt-3 text-sm flex flex-col gap-3" style={{ borderTop: "1px solid var(--surface-border)" }}>
         {!session ? (
           <div className="space-y-2">
             <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
@@ -117,6 +117,9 @@ export default function Sidebar({ importedChats, onSelectChat }: SidebarProps) {
             </button>
           </div>
         )}
+        <div className="text-[10px] text-center pb-2 pt-1" style={{ color: "var(--text-muted)" }}>
+          &copy; {new Date().getFullYear()} Siddhesh Dumre
+        </div>
       </div>
     </aside>
   );

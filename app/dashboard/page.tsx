@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useCallback, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import Sidebar from "./components/Sidebar";
 import ChatPreview from "./components/ChatPreview";
 import AnalysisTabs from "./components/AnalysisTabs";
@@ -141,7 +142,7 @@ export default function DashboardPage() {
 
   // The shared import bar (reused in both positions)
   const ImportBar = (
-    <div className="flex gap-3 w-full">
+    <motion.div layoutId="import-bar" className="flex gap-3 w-full" transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}>
       <input
         value={chatLink}
         onChange={(e) => setChatLink(e.target.value)}
@@ -156,15 +157,17 @@ export default function DashboardPage() {
         autoFocus={!hasContent}
         aria-label="Chat link"
       />
-      <button
+      <motion.button
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
         onClick={() => void runImport()}
         disabled={loading}
         className="rounded-lg px-5 py-2.5 text-sm font-semibold transition-opacity disabled:opacity-50 shrink-0"
         style={{ background: "var(--accent)", color: "#0a0f0a" }}
       >
         {loading ? "Extracting..." : "Extract"}
-      </button>
-    </div>
+      </motion.button>
+    </motion.div>
   );
 
   return (
@@ -178,35 +181,48 @@ export default function DashboardPage() {
       <div className="relative flex flex-1 flex-col overflow-hidden">
 
         {/* ── STATE A: blank / centered ── */}
-        {!hasContent && (
-          <div className="flex flex-1 flex-col items-center justify-center px-8 gap-6">
-            <div className="text-center space-y-2 mb-4">
-              <h2 className="text-2xl font-semibold tracking-tight" style={{ color: "var(--text-primary)" }}>
-                Extract memory from a conversation
-              </h2>
-              <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-                Paste a share link from ChatGPT, Claude, or Gemini below.
-              </p>
-            </div>
+        <AnimatePresence mode="popLayout">
+          {!hasContent && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0, scale: 0.95, filter: "blur(4px)" }}
+              transition={{ duration: 0.3 }}
+              className="flex flex-1 flex-col items-center justify-center px-8 gap-6"
+            >
+              <div className="text-center space-y-2 mb-4">
+                <motion.h2 layoutId="heading" className="text-2xl font-semibold tracking-tight" style={{ color: "var(--text-primary)" }}>
+                  Extract memory from a conversation
+                </motion.h2>
+                <motion.p layoutId="sub" className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                  Paste a share link from ChatGPT, Claude, or Gemini below.
+                </motion.p>
+              </div>
 
-            <div className="w-full max-w-2xl space-y-3">
-              {ImportBar}
-              {error && (
-                <div
-                  className="rounded-lg px-4 py-3 text-sm"
-                  style={{ background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.2)", color: "#fca5a5" }}
-                >
-                  {error}{" "}
-                  <button className="underline" onClick={() => void runImport()}>Retry</button>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+              <div className="w-full max-w-2xl space-y-3">
+                {ImportBar}
+                {error && (
+                  <div
+                    className="rounded-lg px-4 py-3 text-sm"
+                    style={{ background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.2)", color: "#fca5a5" }}
+                  >
+                    {error}{" "}
+                    <button className="underline" onClick={() => void runImport()}>Retry</button>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* ── STATE B: processing / results ── */}
         {hasContent && (
-          <div className="flex flex-1 flex-col overflow-hidden">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+            className="flex flex-1 flex-col overflow-hidden"
+          >
             {/* Top import bar */}
             <div className="shrink-0 px-6 pt-5 pb-4 space-y-3">
               {ImportBar}
@@ -283,7 +299,7 @@ export default function DashboardPage() {
                 <ChatPreview messages={messages} defaultExpanded />
               </div>
             </div>
-          </div>
+          </motion.div>
         )}
       </div>
 

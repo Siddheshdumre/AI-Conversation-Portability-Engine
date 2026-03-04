@@ -1,4 +1,5 @@
 import { MODEL_CONTEXT_LIMITS } from "@/lib/tokenizer";
+import { motion } from "framer-motion";
 
 type StatsBarProps = {
     rawTokens: number;
@@ -14,7 +15,10 @@ export default function StatsBar({ rawTokens, compressedTokens, selectedModel }:
     const models = ["GPT", "Claude", "Gemini"];
 
     return (
-        <div
+        <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
             className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg px-4 py-3 text-xs"
             style={{ background: "var(--surface-raised)", border: "1px solid var(--surface-border)" }}
         >
@@ -27,9 +31,12 @@ export default function StatsBar({ rawTokens, compressedTokens, selectedModel }:
                 <div className="flex items-center gap-2">
                     <span style={{ color: "var(--text-muted)" }}>Compressed</span>
                     <div className="flex h-1.5 w-20 overflow-hidden rounded-full" style={{ background: "var(--surface-border)" }}>
-                        <div
-                            className="h-full rounded-full transition-all duration-700"
-                            style={{ width: `${100 - reduction}%`, background: "var(--accent)" }}
+                        <motion.div
+                            initial={{ width: "100%" }}
+                            animate={{ width: `${100 - reduction}%` }}
+                            transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
+                            className="h-full rounded-full"
+                            style={{ background: "var(--accent)" }}
                         />
                     </div>
                     <span className="font-medium" style={{ color: "var(--accent)" }}>{reduction}% smaller</span>
@@ -42,8 +49,11 @@ export default function StatsBar({ rawTokens, compressedTokens, selectedModel }:
                     const limit = MODEL_CONTEXT_LIMITS[model] ?? 128_000;
                     const fits = compressedTokens < limit;
                     return (
-                        <span
+                        <motion.span
                             key={model}
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ duration: 0.4, delay: 0.2 }}
                             className="rounded px-1.5 py-0.5 text-[10px] font-medium"
                             style={
                                 fits
@@ -52,10 +62,10 @@ export default function StatsBar({ rawTokens, compressedTokens, selectedModel }:
                             }
                         >
                             {model}
-                        </span>
+                        </motion.span>
                     );
                 })}
             </div>
-        </div>
+        </motion.div>
     );
 }

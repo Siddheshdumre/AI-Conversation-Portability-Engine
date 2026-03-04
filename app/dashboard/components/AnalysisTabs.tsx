@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import ExportPanel from "./ExportPanel";
 import type { StructuredMemory } from "@/lib/extractor";
 import type { ConversationAnalysis } from "@/lib/analyzer";
@@ -38,26 +39,36 @@ function MemorySection({ label, value }: { label: string; value: string | string
 
   return (
     <div>
-      <button className="section-toggle" onClick={() => setOpen(o => !o)}>
+      <button className="section-toggle transition-colors" onClick={() => setOpen(o => !o)} style={{ outline: "none" }}>
         <span>{label}</span>
         <span style={{ color: "var(--text-muted)", fontSize: "10px" }}>{open ? "collapse" : "expand"}</span>
       </button>
-      {open && (
-        <div className="pt-2 pb-4">
-          {Array.isArray(value) ? (
-            <ul className="space-y-1.5">
-              {(value as string[]).map((item, i) => (
-                <li key={i} className="flex gap-2.5 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-                  <span style={{ color: "var(--text-muted)", marginTop: "1px" }}>—</span>
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>{value as string}</p>
-          )}
-        </div>
-      )}
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+            style={{ overflow: "hidden" }}
+          >
+            <div className="pt-2 pb-4">
+              {Array.isArray(value) ? (
+                <ul className="space-y-1.5">
+                  {(value as string[]).map((item, i) => (
+                    <li key={i} className="flex gap-2.5 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                      <span style={{ color: "var(--text-muted)", marginTop: "1px" }}>—</span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>{value as string}</p>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
