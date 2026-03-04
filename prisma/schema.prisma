@@ -7,6 +7,11 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum PlanTier {
+  FREE
+  PRO
+}
+
 model User {
   id            String       @id @default(cuid())
   name          String?
@@ -15,6 +20,18 @@ model User {
   image         String?
   password      String?
   createdAt     DateTime     @default(now())
+  
+  // Subscription
+  plan              PlanTier @default(FREE)
+  stripeCustomerId  String?  @unique
+  stripePriceId     String?
+  stripeCurrentPeriodEnd DateTime?
+  
+  // Usage tracking
+  importsThisMonth  Int      @default(0)
+  tokensThisMonth   Int      @default(0)
+  lastUsageReset    DateTime @default(now())
+
   accounts      Account[]
   sessions      Session[]
   chatImports   ChatImport[]

@@ -1,55 +1,80 @@
 import Link from "next/link";
-import Button from "@/components/Button";
 
-const features = [
-  "Structured summaries for long AI conversations",
-  "Memory extraction for better continuation prompts",
-  "Model-specific export with compression control",
-  "Secure, reusable workspace for imported chats",
+const steps = [
+  { label: "Paste", desc: "Drop a ChatGPT, Claude, or Gemini share link." },
+  { label: "Extract", desc: "We parse the conversation and build a structured context pack." },
+  { label: "Continue", desc: "Paste the pack into any model. Pick up exactly where you left off." },
 ];
 
 export default function LandingPage() {
   return (
-    <main className="min-h-screen">
-      <section className="mx-auto flex max-w-6xl flex-col items-start gap-6 px-6 py-24">
-        <p className="rounded-full border border-indigo-400/30 bg-indigo-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-indigo-300">
-          AI Conversation Portability Engine
-        </p>
-        <h1 className="max-w-3xl text-4xl font-semibold leading-tight md:text-5xl">
-          Preserve and Transfer AI Conversations Without Losing Context
-        </h1>
-        <p className="max-w-2xl text-slate-300">
-          Import a share link, generate rich analysis, and export optimized continuation prompts across GPT, Gemini, and Claude.
-        </p>
-        <div className="flex gap-3">
-          <Link href="/dashboard">
-            <Button>Import Chat</Button>
+    <main className="min-h-screen" style={{ background: "var(--surface)", color: "var(--text-primary)" }}>
+      {/* Navbar */}
+      <nav className="flex items-center justify-between px-8 py-5" style={{ borderBottom: "1px solid var(--surface-border)" }}>
+        <span className="text-base font-semibold tracking-tight">Portability</span>
+        <div className="flex items-center gap-4">
+          <Link href="/auth/login" className="nav-link text-sm">
+            Sign in
           </Link>
-          <Link href="/auth/login">
-            <Button variant="secondary">Login</Button>
+          <Link href="/dashboard">
+            <button
+              className="rounded-lg px-4 py-2 text-sm font-medium"
+              style={{ background: "var(--accent)", color: "#0a0f0a" }}
+            >
+              Try it free
+            </button>
+          </Link>
+        </div>
+      </nav>
+
+      {/* Hero */}
+      <section className="mx-auto max-w-4xl px-8 py-28 text-center">
+        <h1 className="text-5xl font-semibold leading-tight tracking-tight">
+          Your AI conversations,{" "}
+          <span style={{ color: "var(--accent)" }}>preserved.</span>
+        </h1>
+        <p className="mx-auto mt-5 max-w-xl text-base leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+          Paste a share link. We extract its memory into a structured context pack you can drop into
+          any model — GPT, Claude, or Gemini — and continue exactly where you left off.
+        </p>
+        <div className="mt-8 flex justify-center gap-3">
+          <Link href="/dashboard">
+            <button
+              className="rounded-lg px-6 py-3 text-sm font-semibold"
+              style={{ background: "var(--accent)", color: "#0a0f0a" }}
+            >
+              Extract memory
+            </button>
+          </Link>
+          <Link href="/auth/signup">
+            <button className="ghost-btn px-6 py-3 text-sm font-medium">
+              Create account
+            </button>
           </Link>
         </div>
       </section>
 
-      <section className="mx-auto grid max-w-6xl gap-6 px-6 pb-20 md:grid-cols-3">
-        {["Paste Link", "Extract Memory", "Export Prompt"].map((step, idx) => (
-          <div key={step} className="card p-6">
-            <p className="mb-2 text-xs uppercase tracking-wide text-indigo-300">Step {idx + 1}</p>
-            <h3 className="text-lg font-medium">{step}</h3>
+      {/* Steps */}
+      <section className="mx-auto max-w-4xl grid grid-cols-1 gap-4 px-8 pb-24 md:grid-cols-3">
+        {steps.map(({ label, desc }, idx) => (
+          <div
+            key={label}
+            className="rounded-xl p-6"
+            style={{ background: "var(--surface-raised)", border: "1px solid var(--surface-border)" }}
+          >
+            <p className="mb-2 text-xs font-medium" style={{ color: "var(--text-muted)" }}>0{idx + 1}</p>
+            <h3 className="mb-2 text-base font-semibold" style={{ color: "var(--text-primary)" }}>{label}</h3>
+            <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>{desc}</p>
           </div>
         ))}
       </section>
 
-      <section className="mx-auto grid max-w-6xl gap-4 px-6 pb-20 md:grid-cols-2">
-        {features.map((feature) => (
-          <div key={feature} className="card p-5 text-sm text-slate-300">
-            {feature}
-          </div>
-        ))}
-      </section>
-
-      <footer className="border-t border-slate-800 px-6 py-8 text-center text-sm text-slate-400">
-        © {new Date().getFullYear()} AI Conversation Portability Engine
+      {/* Footer */}
+      <footer
+        className="px-8 py-6 text-center text-xs"
+        style={{ borderTop: "1px solid var(--surface-border)", color: "var(--text-muted)" }}
+      >
+        &copy; {new Date().getFullYear()} Portability
       </footer>
     </main>
   );

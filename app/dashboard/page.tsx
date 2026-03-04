@@ -1,13 +1,11 @@
 "use client";
 
 import { useMemo, useState, useCallback, useEffect } from "react";
-import Input from "@/components/Input";
-import Button from "@/components/Button";
-import LoadingSpinner from "@/components/LoadingSpinner";
-import Toast from "@/components/Toast";
 import Sidebar from "./components/Sidebar";
 import ChatPreview from "./components/ChatPreview";
 import AnalysisTabs from "./components/AnalysisTabs";
+import StatsBar from "./components/StatsBar";
+import Toast from "@/components/Toast";
 import type { StructuredMemory } from "@/lib/extractor";
 import type { ConversationAnalysis } from "@/lib/analyzer";
 
@@ -25,10 +23,10 @@ type ImportedChat = {
 };
 
 const loadingSteps = [
-  "Fetching conversation…",
-  "Parsing messages…",
-  "Extracting memory…",
-  "Generating analysis…",
+  "Fetching conversation",
+  "Parsing messages",
+  "Extracting structured memory",
+  "Optimising for export",
 ];
 
 export default function DashboardPage() {
@@ -46,15 +44,15 @@ export default function DashboardPage() {
   const [selectedModel, setSelectedModel] = useState("GPT");
   const [compressionLevel, setCompressionLevel] = useState("Balanced");
   const [toast, setToast] = useState(false);
-  const [isDemoData, setIsDemoData] = useState(false);
+
+  // True once we have content — triggers layout shift from centered → top bar
+  const hasContent = loading || !!memory || !!analysis || messages.length > 0;
 
   useEffect(() => {
     fetch("/api/history")
       .then((res) => res.json())
       .then((data) => {
-        if (data.history) {
-          setImportedChats(data.history);
-        }
+        if (data.history) setImportedChats(data.history);
       })
       .catch((err) => console.error("Failed to load history", err));
   }, []);
@@ -67,20 +65,15 @@ export default function DashboardPage() {
       const res = await fetch(`/api/history/${id}`);
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || "Failed to load chat");
-
       const chat = data.chat;
       setChatLink(chat.url);
       setMemory(chat.memory);
       setAnalysis(chat.analysis);
       setTokenCount(chat.tokenCount);
-      // We don't save full messages array in DB to save space, only memory and analysis.
-      // So chat preview might be empty when loaded from history unless we re-fetch chunks.
-      // For now, we just clear messages to focus on analysis tabs.
       setMessages([]);
-      setIsDemoData(false);
       setActiveTab("Summary");
     } catch (err: any) {
-      setError(err.message || "Failed to load chat data from history.");
+      setError(err.message || "Failed to load chat data.");
     } finally {
       setLoading(false);
     }
@@ -93,15 +86,13 @@ export default function DashboardPage() {
       setError("Please enter a valid URL.");
       return;
     }
-
     setError(null);
     setLoading(true);
     setStepIndex(0);
 
-    // Animate through loading steps
     const stepInterval = setInterval(() => {
       setStepIndex((prev) => Math.min(prev + 1, loadingSteps.length - 1));
-    }, 1200);
+    }, 1800);
 
     try {
       const res = await fetch("/api/import", {
@@ -113,12 +104,13 @@ export default function DashboardPage() {
       const data = await res.json() as {
         success?: boolean;
         error?: string;
+        code?: string;
         messages?: Message[];
         memory?: StructuredMemory;
         analysis?: ConversationAnalysis;
         exportText?: string;
         tokenCount?: number;
-        isDemoData?: boolean;
+        conversationStats?: { totalTokens: number };
       };
 
       if (!res.ok || !data.success) {
@@ -130,128 +122,171 @@ export default function DashboardPage() {
       setMemory(data.memory ?? null);
       setAnalysis(data.analysis ?? null);
       setExportText(data.exportText ?? "");
-      setTokenCount(data.tokenCount ?? 0);
-      setIsDemoData(data.isDemoData ?? false);
+      setTokenCount(data.conversationStats?.totalTokens ?? data.tokenCount ?? 0);
 
-      const title = data.memory?.overview?.slice(0, 48) ?? new URL(chatLink.trim()).hostname;
-
-      // Re-fetch history to get the newly created ID
       fetch("/api/history")
-        .then((res) => res.json())
-        .then((d) => {
-          if (d.history) {
-            setImportedChats(d.history);
-          }
-        });
+        .then((r) => r.json())
+        .then((d) => { if (d.history) setImportedChats(d.history); });
+
       setActiveTab("Summary");
     } catch {
-      setError("Network error. Please check your connection and try again.");
+      setError("Network error. Please check your connection.");
     } finally {
       clearInterval(stepInterval);
       setLoading(false);
     }
   }, [canImport, chatLink]);
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === "Enter") void runImport();
-    },
-    [runImport]
+  const compressedTokens = Math.ceil(exportText.length / 4);
+
+  // The shared import bar (reused in both positions)
+  const ImportBar = (
+    <div className="flex gap-3 w-full">
+      <input
+        value={chatLink}
+        onChange={(e) => setChatLink(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && void runImport()}
+        placeholder="Paste a ChatGPT, Claude, or Gemini share link"
+        className="flex-1 rounded-lg px-4 py-2.5 text-sm focus:outline-none transition-all"
+        style={{
+          background: "var(--surface-raised)",
+          border: "1px solid var(--surface-border)",
+          color: "var(--text-primary)",
+        }}
+        autoFocus={!hasContent}
+        aria-label="Chat link"
+      />
+      <button
+        onClick={() => void runImport()}
+        disabled={loading}
+        className="rounded-lg px-5 py-2.5 text-sm font-semibold transition-opacity disabled:opacity-50 shrink-0"
+        style={{ background: "var(--accent)", color: "#0a0f0a" }}
+      >
+        {loading ? "Extracting..." : "Extract"}
+      </button>
+    </div>
   );
 
   return (
-    <main className="h-screen p-4 md:p-6">
-      <div className="grid h-full grid-cols-1 gap-4 lg:grid-cols-[260px_1fr_420px]">
+    <main className="flex h-screen overflow-hidden">
+      {/* Sidebar */}
+      <div className="w-56 shrink-0 h-full overflow-hidden">
         <Sidebar importedChats={importedChats} onSelectChat={loadChat} />
+      </div>
 
-        <section className="space-y-4 overflow-hidden">
-          <div className="card p-4">
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Input
-                value={chatLink}
-                onChange={(e) => setChatLink(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Paste AI chat share link (e.g. chatgpt.com/share/...)"
-                aria-label="Chat link"
-              />
-              <Button onClick={() => void runImport()} disabled={loading}>
-                {loading ? (
-                  <>
-                    <LoadingSpinner />
-                    <span className="ml-2">Importing…</span>
-                  </>
-                ) : (
-                  "Import"
-                )}
-              </Button>
+      {/* Main workspace */}
+      <div className="relative flex flex-1 flex-col overflow-hidden">
+
+        {/* ── STATE A: blank / centered ── */}
+        {!hasContent && (
+          <div className="flex flex-1 flex-col items-center justify-center px-8 gap-6">
+            <div className="text-center space-y-2 mb-4">
+              <h2 className="text-2xl font-semibold tracking-tight" style={{ color: "var(--text-primary)" }}>
+                Extract memory from a conversation
+              </h2>
+              <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                Paste a share link from ChatGPT, Claude, or Gemini below.
+              </p>
             </div>
 
-            {loading && (
-              <div className="mt-3 space-y-1">
-                {loadingSteps.map((step, idx) => (
-                  <p
-                    key={step}
-                    className={`text-xs transition-opacity duration-300 ${idx <= stepIndex ? "text-indigo-300 opacity-100" : "text-slate-500 opacity-40"
-                      }`}
-                  >
-                    {idx < stepIndex ? "✓" : idx === stepIndex ? "⏳" : "○"} {step}
-                  </p>
-                ))}
-              </div>
-            )}
-
-            {isDemoData && !loading && messages.length > 0 && (
-              <p className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
-                ⚠ Demo data shown — add your OpenAI key in <code>.env.local</code> and paste a real ChatGPT share link to analyse your conversations.
-              </p>
-            )}
-
-            {error && (
-              <div className="mt-3 rounded-lg border border-red-400/40 bg-red-500/10 p-3 text-sm text-red-200">
-                {error}{" "}
-                <button className="underline" onClick={() => void runImport()}>
-                  Retry
-                </button>
-              </div>
-            )}
+            <div className="w-full max-w-2xl space-y-3">
+              {ImportBar}
+              {error && (
+                <div
+                  className="rounded-lg px-4 py-3 text-sm"
+                  style={{ background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.2)", color: "#fca5a5" }}
+                >
+                  {error}{" "}
+                  <button className="underline" onClick={() => void runImport()}>Retry</button>
+                </div>
+              )}
+            </div>
           </div>
+        )}
 
-          <div className="h-[calc(100vh-220px)] min-h-80">
-            <ChatPreview messages={messages} />
+        {/* ── STATE B: processing / results ── */}
+        {hasContent && (
+          <div className="flex flex-1 flex-col overflow-hidden">
+            {/* Top import bar */}
+            <div className="shrink-0 px-6 pt-5 pb-4 space-y-3">
+              {ImportBar}
+
+              {/* Loading steps */}
+              {loading && (
+                <div className="space-y-1.5 pt-1">
+                  {loadingSteps.map((step, idx) => (
+                    <p
+                      key={step}
+                      className={`text-xs transition-all duration-300 ${idx < stepIndex ? "step-done" : idx === stepIndex ? "step-active" : "step-pending"
+                        }`}
+                    >
+                      {step}
+                    </p>
+                  ))}
+                </div>
+              )}
+
+              {/* Stats bar */}
+              {!loading && tokenCount > 0 && (
+                <StatsBar
+                  rawTokens={tokenCount}
+                  compressedTokens={compressedTokens}
+                  selectedModel={selectedModel}
+                />
+              )}
+
+              {/* Error */}
+              {error && (
+                <div
+                  className="rounded-lg px-4 py-3 text-sm"
+                  style={{ background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.2)", color: "#fca5a5" }}
+                >
+                  {error}{" "}
+                  <button className="underline" onClick={() => void runImport()}>Retry</button>
+                </div>
+              )}
+            </div>
+
+            {/* Content: Analysis (main) + Chat (secondary right) */}
+            <div className="flex flex-1 gap-4 overflow-hidden px-6 pb-6">
+              <div className="flex-1 overflow-hidden">
+                <AnalysisTabs
+                  activeTab={activeTab}
+                  setActiveTab={setActiveTab}
+                  selectedModel={selectedModel}
+                  setSelectedModel={setSelectedModel}
+                  compressionLevel={compressionLevel}
+                  setCompressionLevel={setCompressionLevel}
+                  analysis={analysis}
+                  memory={memory}
+                  exportText={exportText}
+                  onExportChange={async (model, compression) => {
+                    if (!memory) return;
+                    try {
+                      const res = await fetch("/api/export", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ memory, model, compression }),
+                      });
+                      const data = await res.json() as { exportText?: string };
+                      if (data.exportText) setExportText(data.exportText);
+                    } catch { /* silent */ }
+                  }}
+                  onCopy={async () => {
+                    await navigator.clipboard.writeText(exportText);
+                    setToast(true);
+                    setTimeout(() => setToast(false), 1600);
+                  }}
+                />
+              </div>
+              <div className="w-72 shrink-0 overflow-hidden">
+                <ChatPreview messages={messages} defaultExpanded />
+              </div>
+            </div>
           </div>
-        </section>
-
-        <AnalysisTabs
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          selectedModel={selectedModel}
-          setSelectedModel={setSelectedModel}
-          compressionLevel={compressionLevel}
-          setCompressionLevel={setCompressionLevel}
-          analysis={analysis}
-          memory={memory}
-          exportText={exportText}
-          onExportChange={async (model, compression) => {
-            if (!memory) return;
-            try {
-              const res = await fetch("/api/export", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ memory, model, compression }),
-              });
-              const data = await res.json() as { exportText?: string };
-              if (data.exportText) setExportText(data.exportText);
-            } catch {
-              // silently ignore
-            }
-          }}
-          onCopy={async () => {
-            await navigator.clipboard.writeText(exportText);
-            setToast(true);
-            setTimeout(() => setToast(false), 1600);
-          }}
-        />
+        )}
       </div>
+
       {toast && <Toast message="Copied to clipboard" />}
     </main>
   );

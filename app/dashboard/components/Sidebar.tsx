@@ -1,5 +1,5 @@
+"use client";
 import Link from "next/link";
-import Button from "@/components/Button";
 import { useSession, signOut } from "next-auth/react";
 
 type ImportedChat = {
@@ -15,53 +15,108 @@ type SidebarProps = {
   onSelectChat?: (id: string) => void;
 };
 
+function timeAgo(dateStr: string) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const days = Math.floor(diff / 86400000);
+  if (days === 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days < 7) return `${days} days ago`;
+  return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
 export default function Sidebar({ importedChats, onSelectChat }: SidebarProps) {
   const { data: session } = useSession();
 
   return (
-    <aside className="card flex h-full flex-col gap-4 overflow-hidden p-4">
+    <aside className="flex h-full flex-col gap-5 overflow-hidden px-4 py-5" style={{ borderRight: "1px solid var(--surface-border)" }}>
+      {/* Wordmark */}
       <div>
-        <p className="text-xs uppercase tracking-wider text-indigo-300">Workspace</p>
-        <h2 className="text-lg font-semibold">Portability</h2>
+        <span className="text-base font-semibold tracking-tight" style={{ color: "var(--text-primary)" }}>Portability</span>
       </div>
 
+      {/* New extraction CTA */}
       <Link href="/dashboard">
-        <Button className="w-full">+ New Import</Button>
+        <button
+          className="w-full rounded-md px-3 py-2 text-sm font-medium transition-all"
+          style={{
+            background: "var(--accent-muted)",
+            border: "1px solid var(--accent-border)",
+            color: "var(--accent)",
+          }}
+        >
+          Extract memory
+        </button>
       </Link>
 
-      <div className="flex-1 space-y-2 overflow-y-auto">
-        <p className="text-xs uppercase tracking-wide text-slate-400">Session History</p>
+      {/* History */}
+      <div className="flex-1 overflow-y-auto space-y-1">
+        <p className="mb-2 text-xs font-medium" style={{ color: "var(--text-muted)" }}>Your extractions</p>
         {importedChats.length === 0 ? (
-          <p className="text-sm text-slate-500">No chats imported yet.</p>
+          <p className="text-sm" style={{ color: "var(--text-muted)" }}>Nothing here yet.</p>
         ) : (
           importedChats.map((chat, i) => (
             <button
               key={chat.id || i}
               onClick={() => chat.id && onSelectChat?.(chat.id)}
-              className="w-full text-left rounded-lg hover:bg-slate-700/50 border border-slate-700 bg-slate-800/50 p-2.5 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full text-left rounded-md px-3 py-2.5 text-sm transition-colors focus:outline-none"
+              style={{ color: "var(--text-secondary)" }}
+              onMouseEnter={e => {
+                (e.currentTarget as HTMLButtonElement).style.background = "var(--surface-border)";
+                (e.currentTarget as HTMLButtonElement).style.color = "var(--text-primary)";
+              }}
+              onMouseLeave={e => {
+                (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+                (e.currentTarget as HTMLButtonElement).style.color = "var(--text-secondary)";
+              }}
             >
-              <p className="truncate font-medium text-slate-200" title={chat.title}>
-                {chat.title || chat.url}
+              <p className="truncate font-medium leading-snug" style={{ color: "var(--text-primary)" }} title={chat.title}>
+                {chat.title || new URL(chat.url).hostname}
               </p>
-              <div className="mt-1 flex justify-between text-xs text-slate-500">
-                <span>~{chat.tokenCount?.toLocaleString() || 0} tokens</span>
-                {chat.createdAt && <span>{new Date(chat.createdAt).toLocaleDateString()}</span>}
-              </div>
+              {chat.createdAt && (
+                <p className="mt-0.5 text-xs" style={{ color: "var(--text-muted)" }}>
+                  {timeAgo(chat.createdAt)}
+                </p>
+              )}
             </button>
           ))
         )}
       </div>
 
-      <div className="mt-auto space-y-4 border-t border-slate-700 pt-3 text-sm text-slate-400">
-        <div className="flex items-center gap-2 overflow-hidden items-end justify-between">
-          <div className="flex flex-col truncate pr-2">
-            <span className="font-medium text-slate-200 truncate">{session?.user?.name || session?.user?.email || "User"}</span>
-            <p className="text-[10px] text-slate-500">{process.env.NEXT_PUBLIC_HAS_API_KEY === "1" ? "LLM Ready" : "Set GROQ DB"}</p>
+      {/* Footer */}
+      <div className="pt-3 text-sm" style={{ borderTop: "1px solid var(--surface-border)" }}>
+        {!session ? (
+          <div className="space-y-2">
+            <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+              3 free extractions remaining. Sign in to save your work.
+            </p>
+            <Link href="/auth/login">
+              <button
+                className="w-full rounded-md px-3 py-2 text-sm font-medium transition-colors"
+                style={{ background: "var(--surface-border)", color: "var(--text-primary)" }}
+              >
+                Sign in
+              </button>
+            </Link>
           </div>
-          <button onClick={() => void signOut({ callbackUrl: "/auth/login" })} className="text-xs underline hover:text-slate-300">
-            Sign Out
-          </button>
-        </div>
+        ) : (
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="truncate font-medium text-sm" style={{ color: "var(--text-primary)" }}>
+                {session.user?.name || session.user?.email}
+              </p>
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>Free plan</p>
+            </div>
+            <button
+              onClick={() => void signOut({ callbackUrl: "/auth/login" })}
+              className="shrink-0 text-xs transition-colors"
+              style={{ color: "var(--text-muted)" }}
+              onMouseEnter={e => (e.currentTarget.style.color = "var(--text-secondary)")}
+              onMouseLeave={e => (e.currentTarget.style.color = "var(--text-muted)")}
+            >
+              Sign out
+            </button>
+          </div>
+        )}
       </div>
     </aside>
   );

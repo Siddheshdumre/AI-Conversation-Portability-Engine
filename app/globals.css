@@ -1,15 +1,145 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  color-scheme: light dark;
+  --accent: #a3e635;
+  --accent-dim: #84cc16;
+  --accent-muted: rgba(163, 230, 53, 0.12);
+  --accent-border: rgba(163, 230, 53, 0.25);
+  --surface: #0f1117;
+  --surface-raised: #161b22;
+  --surface-border: #21262d;
+  --text-primary: #e6edf3;
+  --text-secondary: #848d97;
+  --text-muted: #484f58;
+}
+
+html {
+  font-size: 14px;
 }
 
 body {
-  @apply bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background-color: var(--surface);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .card {
-  @apply rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900;
+  background-color: var(--surface-raised);
+  border: 1px solid var(--surface-border);
+  border-radius: 10px;
+}
+
+/* Lime accent utilities */
+.accent {
+  color: var(--accent);
+}
+
+.accent-bg {
+  background-color: var(--accent-muted);
+}
+
+.accent-border {
+  border-color: var(--accent-border);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--surface-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #30363d;
+}
+
+/* Underline tab active indicator */
+.tab-active {
+  color: var(--accent);
+  border-bottom: 2px solid var(--accent);
+}
+
+.tab-inactive {
+  color: var(--text-secondary);
+  border-bottom: 2px solid transparent;
+}
+
+.tab-inactive:hover {
+  color: var(--text-primary);
+}
+
+/* Collapsible section toggle */
+.section-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--surface-border);
+  transition: color 0.15s;
+}
+
+.section-toggle:hover {
+  color: var(--text-primary);
+}
+
+/* Loading step animation */
+.step-active {
+  color: var(--accent);
+  border-left: 2px solid var(--accent);
+  padding-left: 10px;
+}
+
+.step-done {
+  color: var(--text-muted);
+  border-left: 2px solid var(--surface-border);
+  padding-left: 10px;
+}
+
+.step-pending {
+  color: var(--text-muted);
+  border-left: 2px solid var(--surface-border);
+  padding-left: 10px;
+  opacity: 0.4;
+}
+
+/* Hover helpers for Server Component pages (no JS event handlers needed) */
+.nav-link {
+  color: var(--text-secondary);
+  transition: color 0.15s;
+}
+
+.nav-link:hover {
+  color: var(--text-primary);
+}
+
+.ghost-btn {
+  background: var(--surface-raised);
+  border: 1px solid var(--surface-border);
+  color: var(--text-secondary);
+  transition: color 0.15s;
+  border-radius: 8px;
+}
+
+.ghost-btn:hover {
+  color: var(--text-primary);
 }

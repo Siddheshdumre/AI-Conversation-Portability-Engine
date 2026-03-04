@@ -1,3 +1,5 @@
+"use client";
+import { useState } from "react";
 import ExportPanel from "./ExportPanel";
 import type { StructuredMemory } from "@/lib/extractor";
 import type { ConversationAnalysis } from "@/lib/analyzer";
@@ -16,7 +18,76 @@ type AnalysisTabsProps = {
   onCopy: () => void;
 };
 
-const tabs = ["Summary", "Detailed", "Key Points", "Structured Memory", "Export"];
+const tabs = ["Summary", "Detailed", "Key Points", "Memory", "Export"];
+
+const memorySections: [string, keyof StructuredMemory][] = [
+  ["Overview", "overview"],
+  ["Decisions", "decisions"],
+  ["Key topics", "topics"],
+  ["Code references", "code_references"],
+  ["Assumptions", "assumptions"],
+  ["Open questions", "unresolved_questions"],
+  ["Action items", "action_items"],
+  ["Important points", "important_points"],
+];
+
+function MemorySection({ label, value }: { label: string; value: string | string[] | undefined }) {
+  const [open, setOpen] = useState(true);
+  const items = Array.isArray(value) ? value : value ? [value] : [];
+  if (items.length === 0 || (items.length === 1 && !items[0])) return null;
+
+  return (
+    <div>
+      <button className="section-toggle" onClick={() => setOpen(o => !o)}>
+        <span>{label}</span>
+        <span style={{ color: "var(--text-muted)", fontSize: "10px" }}>{open ? "collapse" : "expand"}</span>
+      </button>
+      {open && (
+        <div className="pt-2 pb-4">
+          {Array.isArray(value) ? (
+            <ul className="space-y-1.5">
+              {(value as string[]).map((item, i) => (
+                <li key={i} className="flex gap-2.5 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                  <span style={{ color: "var(--text-muted)", marginTop: "1px" }}>—</span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>{value as string}</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Shared highlighted copy button — same look as Export's "Copy context pack"
+function CopyButton({ getText, label = "Copy" }: { getText: () => string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    const text = getText();
+    if (!text) return;
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  return (
+    <button
+      onClick={() => void handleCopy()}
+      className="rounded-md px-4 py-2 text-sm font-medium transition-all"
+      style={{
+        background: copied ? "var(--accent)" : "var(--accent-muted)",
+        border: "1px solid var(--accent-border)",
+        color: copied ? "#0a0f0a" : "var(--accent)",
+      }}
+    >
+      {copied ? "Copied" : label}
+    </button>
+  );
+}
 
 export default function AnalysisTabs(props: AnalysisTabsProps) {
   const isEmpty = !props.analysis && !props.memory;
@@ -31,98 +102,100 @@ export default function AnalysisTabs(props: AnalysisTabsProps) {
     await props.onExportChange(props.selectedModel, compression);
   };
 
+  const getSummaryText = () => props.analysis?.summary ?? "";
+  const getDetailedText = () => props.analysis?.detailed ?? "";
+  const getKeyPointsText = () =>
+    (props.analysis?.keyPoints ?? []).map((p, i) => `${i + 1}. ${p}`).join("\n");
+  const getMemoryText = () => {
+    if (!props.memory) return "";
+    const sections = [
+      ["Overview", props.memory.overview],
+      ["Topics", props.memory.topics],
+      ["Decisions", props.memory.decisions],
+      ["Important Points", props.memory.important_points],
+      ["Code References", props.memory.code_references],
+      ["Assumptions", props.memory.assumptions],
+      ["Unresolved Questions", props.memory.unresolved_questions],
+      ["Action Items", props.memory.action_items],
+    ] as [string, string | string[]][];
+    return sections
+      .filter(([, v]) => v && (Array.isArray(v) ? v.length > 0 : true))
+      .map(([label, v]) => {
+        const items = Array.isArray(v) ? v.map(i => `  - ${i}`).join("\n") : v;
+        return `${label}:\n${items}`;
+      })
+      .join("\n\n");
+  };
+
   return (
-    <section className="card flex h-full flex-col p-4">
-      <div className="mb-4 flex flex-wrap gap-2">
+    <section className="card flex h-full flex-col" style={{ overflow: "hidden" }}>
+      {/* Underline tabs */}
+      <div className="flex gap-5 px-5 pt-4" style={{ borderBottom: "1px solid var(--surface-border)" }}>
         {tabs.map((tab) => (
           <button
             key={tab}
             onClick={() => props.setActiveTab(tab)}
-            className={`rounded-lg px-3 py-1.5 text-xs transition-colors ${props.activeTab === tab
-                ? "bg-indigo-500 text-white"
-                : "bg-slate-800 text-slate-300 hover:bg-slate-700"
-              }`}
+            className={`pb-3 text-sm font-medium transition-colors ${props.activeTab === tab ? "tab-active" : "tab-inactive"}`}
           >
             {tab}
           </button>
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      {/* Scrollable content */}
+      <div className="flex-1 overflow-y-auto p-5">
         {isEmpty ? (
-          <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-slate-500">
-            <p className="text-3xl">🧠</p>
-            <p className="text-sm">Import a conversation to see analysis here.</p>
-          </div>
+          <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+            Import a conversation to see its analysis here.
+          </p>
         ) : (
           <>
             {props.activeTab === "Summary" && (
-              <p className="text-sm leading-relaxed text-slate-200">
-                {props.analysis?.summary ?? "No summary available."}
-              </p>
+              <div className="space-y-4">
+                <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                  {props.analysis?.summary ?? "No summary available."}
+                </p>
+                <CopyButton getText={getSummaryText} label="Copy summary" />
+              </div>
             )}
 
             {props.activeTab === "Detailed" && (
-              <div className="space-y-3 text-sm leading-relaxed text-slate-200">
-                {(props.analysis?.detailed ?? "No detailed analysis available.")
-                  .split("\n\n")
-                  .map((paragraph, i) => (
-                    <p key={i}>{paragraph}</p>
-                  ))}
+              <div className="space-y-4">
+                <div className="space-y-4 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                  {(props.analysis?.detailed ?? "No detailed analysis available.")
+                    .split("\n\n")
+                    .map((p, i) => <p key={i}>{p}</p>)}
+                </div>
+                <CopyButton getText={getDetailedText} label="Copy analysis" />
               </div>
             )}
 
             {props.activeTab === "Key Points" && (
-              <ul className="space-y-2 pl-1 text-sm text-slate-200">
-                {(props.analysis?.keyPoints ?? []).length > 0 ? (
-                  props.analysis!.keyPoints.map((point, i) => (
-                    <li key={i} className="flex gap-2">
-                      <span className="mt-1 text-indigo-400">▸</span>
-                      <span>{point}</span>
-                    </li>
-                  ))
-                ) : (
-                  <li className="text-slate-500">No key points extracted.</li>
-                )}
-              </ul>
+              <div className="space-y-4">
+                <ul className="space-y-2">
+                  {(props.analysis?.keyPoints ?? []).length > 0 ? (
+                    props.analysis!.keyPoints.map((point, i) => (
+                      <li key={i} className="flex gap-2.5 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                        <span style={{ color: "var(--text-muted)" }}>—</span>
+                        <span>{point}</span>
+                      </li>
+                    ))
+                  ) : (
+                    <li className="text-sm" style={{ color: "var(--text-muted)" }}>No key points extracted.</li>
+                  )}
+                </ul>
+                <CopyButton getText={getKeyPointsText} label="Copy key points" />
+              </div>
             )}
 
-            {props.activeTab === "Structured Memory" && props.memory && (
-              <div className="space-y-4 text-sm">
-                {(
-                  [
-                    ["Overview", props.memory.overview],
-                    ["Topics", props.memory.topics],
-                    ["Decisions", props.memory.decisions],
-                    ["Important Points", props.memory.important_points],
-                    ["Code References", props.memory.code_references],
-                    ["Assumptions", props.memory.assumptions],
-                    ["Unresolved Questions", props.memory.unresolved_questions],
-                    ["Action Items", props.memory.action_items],
-                  ] as [string, string | string[]][]
-                ).map(([label, value]) => {
-                  const items = Array.isArray(value) ? value : [value];
-                  if (items.length === 0 || (items.length === 1 && !items[0])) return null;
-                  return (
-                    <div key={label}>
-                      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-indigo-400">
-                        {label}
-                      </p>
-                      {Array.isArray(value) ? (
-                        <ul className="space-y-1 text-slate-300">
-                          {(value as string[]).map((item, i) => (
-                            <li key={i} className="flex gap-2">
-                              <span className="text-slate-500">–</span>
-                              {item}
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="text-slate-300">{value as string}</p>
-                      )}
-                    </div>
-                  );
-                })}
+            {props.activeTab === "Memory" && props.memory && (
+              <div className="space-y-0">
+                {memorySections.map(([label, key]) => (
+                  <MemorySection key={key} label={label} value={props.memory![key] as string | string[]} />
+                ))}
+                <div className="pt-4">
+                  <CopyButton getText={getMemoryText} label="Copy memory pack" />
+                </div>
               </div>
             )}
 
