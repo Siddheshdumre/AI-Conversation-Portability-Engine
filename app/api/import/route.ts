@@ -35,12 +35,15 @@ export async function POST(request: NextRequest) {
         }
 
         // Warn but don't block — allow any URL for demo purposes
-        const isShareLink =
+        const isKnownPlatform = 
             parsedUrl.hostname.includes("chatgpt.com") ||
-            parsedUrl.hostname.includes("chat.openai.com");
+            parsedUrl.hostname.includes("chat.openai.com") ||
+            parsedUrl.hostname.includes("gemini.google.com") ||
+            parsedUrl.hostname.includes("bard.google.com") ||
+            parsedUrl.hostname.includes("claude.ai");
 
-        if (!isShareLink) {
-            console.warn("Non-ChatGPT URL submitted:", url);
+        if (!isKnownPlatform) {
+            console.warn("Unknown platform URL submitted:", url);
         }
 
         // Step 1: Fetch & parse conversation
@@ -52,7 +55,12 @@ export async function POST(request: NextRequest) {
                 fetchResult.isDemo && fetchResult.reason
                     ? fetchResult.reason
                     : "Could not extract messages from this link. It may be private or unsupported.";
-            return NextResponse.json({ error: errorMessage }, { status: 422 });
+            
+            const platformInfo = fetchResult.platform ? ` (Platform: ${fetchResult.platform})` : "";
+            return NextResponse.json({ 
+                error: errorMessage + platformInfo,
+                platform: fetchResult.platform || "unknown"
+            }, { status: 422 });
         }
 
         // Step 2: Analyse conversation size and determine strategy
@@ -141,7 +149,7 @@ export async function POST(request: NextRequest) {
                 analysis,
                 exportText,
                 tokenCount,
-                isDemoData: !isShareLink,
+                isDemoData: fetchResult.isDemo || !isKnownPlatform,
                 conversationStats: {
                     totalTokens: stats.totalTokens,
                     estimatedChunks: stats.estimatedChunks,
@@ -168,7 +176,8 @@ export async function POST(request: NextRequest) {
             analysis,
             exportText,
             tokenCount,
-            isDemoData: !isShareLink,
+            isDemoData: fetchResult.isDemo || !isKnownPlatform,
+            platform: fetchResult.platform || "unknown",
             // Expose size metadata so the frontend can inform the user
             conversationStats: {
                 totalTokens: stats.totalTokens,

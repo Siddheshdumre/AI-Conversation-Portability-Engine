@@ -1,4 +1,6 @@
 import axios from "axios";
+import { detectPlatform, getPlatformInfo, getDemoConversationForPlatform, getPlatformError } from "./platform-detector";
+import { fetchGeminiConversation, type GeminiFetchResult } from "./fetchers/gemini-fetcher";
 
 export type Message = {
     role: "user" | "assistant" | "system";
@@ -6,17 +8,21 @@ export type Message = {
 };
 
 export type FetchResult =
-    | { success: true; messages: Message[]; isDemo: false }
-    | { success: false; messages: Message[]; isDemo: true; reason: string };
+    | { success: true; messages: Message[]; isDemo: false; platform: string }
+    | { success: false; messages: Message[]; isDemo: true; reason: string; platform: string };
 
 /**
- * Fetches a ChatGPT shared conversation and parses it into an ordered list of messages.
+ * Fetches a shared conversation from any supported AI platform and parses it into an ordered list of messages.
  *
- * Strategy (in priority order):
- * 1. ChatGPT backend JSON API  →  /backend-api/share/link/{id}
- * 2. ChatGPT oai API           →  /public-api/conversation-partner/share/{id}
- * 3. HTML page scrape          →  extract __NEXT_DATA__ or linear_conversation
- * 4. Demo data (clearly flagged as such)
+ * Supported platforms:
+ * - ChatGPT (chatgpt.com/share/...)
+ * - Gemini (gemini.google.com/share/...)
+ * - Claude (claude.ai/chat/...) [Future]
+ *
+ * Strategy (in priority order): 
+ * 1. Platform detection → route to platform-specific fetcher
+ * 2. Platform-specific API/DOM scraping
+ * 3. Fallback to demo data with platform-specific messaging
  */
 export async function fetchConversation(url: string): Promise<Message[]> {
     const result = await fetchConversationWithMeta(url);
@@ -24,39 +30,125 @@ export async function fetchConversation(url: string): Promise<Message[]> {
 }
 
 export async function fetchConversationWithMeta(url: string): Promise<FetchResult> {
-    // Extract share ID from URL
-    const shareId = extractShareId(url);
+    const platformInfo = getPlatformInfo(url);
+    const { platform, id, hostname } = platformInfo;
+    
+    console.log(`[fetcher] Platform detected: ${platform}, ID: ${id}, Host: ${hostname}`);
+    
+    // Route to platform-specific fetcher
+    switch (platform) {
+        case "chatgpt":
+            return await fetchChatGPTConversationWithMeta(url, id);
+        case "gemini":
+            return await fetchGeminiConversationWithMeta(url, id);
+        case "claude":
+            // Future implementation
+            return {
+                success: false,
+                messages: getDemoConversationForPlatform(platform),
+                isDemo: true,
+                platform,
+                reason: "Claude conversation import is not yet supported. Please use ChatGPT or Gemini links."
+            };
+        default:
+            return {
+                success: false,
+                messages: getDemoConversationForPlatform("unknown" as any),
+                isDemo: true,
+                platform: "unknown",
+                reason: "Unsupported platform. Please use ChatGPT (chatgpt.com/share/...) or Gemini (gemini.google.com/share/...) share links."
+            };
+    }
+}
 
-    if (shareId) {
-        // Strategy 1: ChatGPT backend JSON API (most reliable)
-        const apiResult = await tryChatGPTApi(shareId);
-        if (apiResult && apiResult.length > 0) {
-            return { success: true, messages: apiResult, isDemo: false };
-        }
+// ─── Platform-Specific Fetchers ─────────────────────────────────────────────
 
-        // Strategy 2: Public API variant
-        const publicApiResult = await tryChatGPTPublicApi(shareId);
-        if (publicApiResult && publicApiResult.length > 0) {
-            return { success: true, messages: publicApiResult, isDemo: false };
-        }
+async function fetchChatGPTConversationWithMeta(url: string, shareId: string | null): Promise<FetchResult> {
+    if (!shareId) {
+        return {
+            success: false,
+            messages: getDemoConversationForPlatform("chatgpt"),
+            isDemo: true,
+            platform: "chatgpt",
+            reason: getPlatformError("chatgpt", shareId || undefined)
+        };
+    }
+
+    // Strategy 1: ChatGPT backend JSON API (most reliable)
+    const apiResult = await tryChatGPTApi(shareId);
+    if (apiResult && apiResult.length > 0) {
+        return { success: true, messages: apiResult, isDemo: false, platform: "chatgpt" };
+    }
+
+    // Strategy 2: Public API variant
+    const publicApiResult = await tryChatGPTPublicApi(shareId);
+    if (publicApiResult && publicApiResult.length > 0) {
+        return { success: true, messages: publicApiResult, isDemo: false, platform: "chatgpt" };
     }
 
     // Strategy 3: HTML scraping (last resort for real links)
     if (isHttpUrl(url)) {
         const scraped = await tryHtmlScrape(url);
         if (scraped && scraped.length > 0) {
-            return { success: true, messages: scraped, isDemo: false };
+            return { success: true, messages: scraped, isDemo: false, platform: "chatgpt" };
         }
     }
 
     // Strategy 4: Demo — clearly flagged
     return {
         success: false,
-        messages: getDemoConversation(),
+        messages: getDemoConversationForPlatform("chatgpt"),
         isDemo: true,
-        reason: shareId
-            ? `Could not fetch conversation '${shareId}'. The link may be private, deleted, or ChatGPT's API structure changed.`
-            : "Not a recognised ChatGPT share link. Showing demo data.",
+        platform: "chatgpt",
+        reason: getPlatformError("chatgpt", shareId)
+    };
+}
+
+async function fetchGeminiConversationWithMeta(url: string, shareId: string | null): Promise<FetchResult> {
+    console.log(`[fetcher] Gemini fetch attempt - URL: ${url}, ID: ${shareId}`);
+    
+    if (!shareId) {
+        console.log(`[fetcher] No Gemini share ID found`);
+        return {
+            success: false,
+            messages: getDemoConversationForPlatform("gemini"),
+            isDemo: true,
+            platform: "gemini",
+            reason: getPlatformError("gemini", shareId || undefined)
+        };
+    }
+
+    try {
+        console.log(`[fetcher] Calling fetchGeminiConversation with URL: ${url}, ID: ${shareId}`);
+        const result = await fetchGeminiConversation(url, shareId);
+        console.log(`[fetcher] Gemini fetch result: ${result.messages.length} messages, error: ${result.error ?? 'none'}`);
+        
+        if (result.messages.length > 0) {
+            return { success: true, messages: result.messages, isDemo: false, platform: "gemini" };
+        }
+
+        // Return specific error if the link is invalid
+        if (result.error === "link_invalid") {
+            return {
+                success: false,
+                messages: getDemoConversationForPlatform("gemini"),
+                isDemo: true,
+                platform: "gemini",
+                reason: result.detail ?? "This Gemini share link doesn't exist, has expired, or was deleted. Please check the URL and try again."
+            };
+        }
+    } catch (error) {
+        console.error("[fetcher] Gemini fetch error:", error);
+    }
+
+    // Fallback to demo
+    console.log(`[fetcher] Falling back to Gemini demo data`);
+    return {
+        success: false,
+        messages: getDemoConversationForPlatform("gemini"),
+        isDemo: true,
+        platform: "gemini",
+        reason: getPlatformError("gemini", shareId)
     };
 }
 
@@ -80,8 +172,13 @@ async function tryChatGPTApi(shareId: string): Promise<Message[] | null> {
                 "https://github.com/Sparticuz/chromium/releases/download/v122.0.0/chromium-v122.0.0-pack.tar"
             );
 
+        // chromium.args is only available in serverless (Sparticuz) — use simple args locally
+        const browserArgs = isLocal
+            ? ["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu"]
+            : [...chromium.args, "--no-sandbox", "--disable-setuid-sandbox"];
+
         browser = await puppeteer.launch({
-            args: [...chromium.args, "--no-sandbox", "--disable-setuid-sandbox"],
+            args: browserArgs,
             defaultViewport: { width: 1920, height: 1080 },
             executablePath,
             headless: true,
@@ -327,8 +424,12 @@ function flattenLinearConversation(linear: unknown[]): Message[] {
     return messages;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Legacy ChatGPT Helpers (kept for backward compatibility) ──────────────
 
+/**
+ * Legacy ChatGPT share ID extraction (now handled by platform-detector)
+ * @deprecated Use getPlatformInfo() instead
+ */
 function extractShareId(url: string): string | null {
     try {
         const parsed = new URL(url);
@@ -356,17 +457,10 @@ function commonHeaders() {
     };
 }
 
+/**
+ * Legacy demo conversation (now handled by platform-detector)
+ * @deprecated Use getDemoConversationForPlatform() instead 
+ */
 function getDemoConversation(): Message[] {
-    return [
-        {
-            role: "user",
-            content:
-                "⚠️ This is demo data — could not fetch the real conversation. Paste a valid public ChatGPT share link (chatgpt.com/share/...) to see your actual conversation.",
-        },
-        {
-            role: "assistant",
-            content:
-                "If the link is public, the issue is likely that ChatGPT's API returned an unexpected format. Try refreshing the share link or creating a new one. If you have an OpenAI API key set in .env.local, memory extraction will still run on this demo data.",
-        },
-    ];
+    return getDemoConversationForPlatform("chatgpt");
 }

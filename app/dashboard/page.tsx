@@ -45,6 +45,7 @@ export default function DashboardPage() {
   const [selectedModel, setSelectedModel] = useState("GPT");
   const [compressionLevel, setCompressionLevel] = useState("Balanced");
   const [toast, setToast] = useState(false);
+  const [platform, setPlatform] = useState<string | null>(null);
 
   // True once we have content — triggers layout shift from centered → top bar
   const hasContent = loading || !!memory || !!analysis || messages.length > 0;
@@ -111,6 +112,7 @@ export default function DashboardPage() {
         analysis?: ConversationAnalysis;
         exportText?: string;
         tokenCount?: number;
+        platform?: string;
         conversationStats?: { totalTokens: number };
       };
 
@@ -124,6 +126,7 @@ export default function DashboardPage() {
       setAnalysis(data.analysis ?? null);
       setExportText(data.exportText ?? "");
       setTokenCount(data.conversationStats?.totalTokens ?? data.tokenCount ?? 0);
+      setPlatform(data.platform || null);
 
       fetch("/api/history")
         .then((r) => r.json())
@@ -192,10 +195,10 @@ export default function DashboardPage() {
             >
               <div className="text-center space-y-2 mb-4">
                 <motion.h2 layoutId="heading" className="text-2xl font-semibold tracking-tight" style={{ color: "var(--text-primary)" }}>
-                  Extract memory from a conversation
+                  Extract memory from any AI conversation
                 </motion.h2>
                 <motion.p layoutId="sub" className="text-sm" style={{ color: "var(--text-secondary)" }}>
-                  Paste a share link from ChatGPT, Claude, or Gemini below.
+                  Paste a share link from <strong>ChatGPT</strong>, <strong>Gemini</strong>, or <strong>Claude</strong> below.
                 </motion.p>
               </div>
 

@@ -2,9 +2,9 @@ import { db } from "./db";
 import { PlanTier } from "@prisma/client";
 
 export const LIMITS = {
-    ANONYMOUS: { MAX_IMPORTS: 3, MAX_TOKENS_PER_IMPORT: 15000 },
-    FREE: { MAX_IMPORTS: 30, MAX_TOKENS_PER_IMPORT: 50000 },
-    PRO: { MAX_IMPORTS: 500, MAX_TOKENS_PER_IMPORT: 200000 }
+    ANONYMOUS: { MAX_IMPORTS: 3, MAX_TOKENS_PER_IMPORT: 700000 },
+    FREE: { MAX_IMPORTS: 30, MAX_TOKENS_PER_IMPORT: 700000 },
+    PRO: { MAX_IMPORTS: 500, MAX_TOKENS_PER_IMPORT: 700000 }
 };
 
 export async function checkUsage(userId: string) {

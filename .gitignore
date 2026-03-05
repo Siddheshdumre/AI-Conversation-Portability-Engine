@@ -1,7 +1,12 @@
-node_modules
+﻿node_modules
 .next
 .env.local
 .env
 .DS_Store
 
 /lib/generated/prisma
+
+# Compiled test artifacts
+test-fetch.js
+test-*.js
+lib/**/*.js
