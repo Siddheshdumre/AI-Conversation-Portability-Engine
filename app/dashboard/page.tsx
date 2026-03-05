@@ -282,7 +282,13 @@ export default function DashboardPage() {
                       const res = await fetch("/api/export", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ memory, model, compression }),
+                        body: JSON.stringify({ 
+                          memory, 
+                          analysis,
+                          model, 
+                          compression,
+                          format: "prompt" 
+                        }),
                       });
                       const data = await res.json() as { exportText?: string };
                       if (data.exportText) setExportText(data.exportText);

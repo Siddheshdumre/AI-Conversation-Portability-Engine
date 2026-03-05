@@ -218,6 +218,8 @@ export default function AnalysisTabs(props: AnalysisTabsProps) {
                 setCompressionLevel={(c) => void handleCompressionChange(c)}
                 exportText={props.exportText}
                 onCopy={props.onCopy}
+                memory={props.memory}
+                analysis={props.analysis}
               />
             )}
           </>

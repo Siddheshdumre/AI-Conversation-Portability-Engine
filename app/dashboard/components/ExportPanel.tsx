@@ -1,4 +1,7 @@
 import { MODEL_CONTEXT_LIMITS } from "@/lib/tokenizer";
+import type { StructuredMemory } from "@/lib/extractor";
+import type { ConversationAnalysis } from "@/lib/analyzer";
+import { useState } from "react";
 
 type ExportPanelProps = {
   selectedModel: string;
@@ -7,6 +10,8 @@ type ExportPanelProps = {
   setCompressionLevel: (value: string) => void;
   exportText: string;
   onCopy: () => void;
+  memory: StructuredMemory | null;
+  analysis: ConversationAnalysis | null;
 };
 
 const MODEL_URLS: Record<string, string> = {
@@ -22,11 +27,85 @@ export default function ExportPanel({
   setCompressionLevel,
   exportText,
   onCopy,
+  memory,
+  analysis,
 }: ExportPanelProps) {
   const estimatedTokens = Math.ceil(exportText.length / 4);
   const contextLimit = MODEL_CONTEXT_LIMITS[selectedModel] ?? 128_000;
   const usage = Math.min((estimatedTokens / contextLimit) * 100, 100);
   const fit = estimatedTokens < contextLimit;
+
+  const [isDownloading, setIsDownloading] = useState<'markdown' | 'pdf' | null>(null);
+
+  const handleDownloadMarkdown = async () => {
+    if (!memory || isDownloading) return;
+    setIsDownloading('markdown');
+    try {
+      const response = await fetch("/api/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          memory,
+          analysis,
+          format: "markdown",
+          title: memory.overview?.slice(0, 50) || "Conversation Report"
+        })
+      });
+      
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "conversation-report.md";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      } else {
+        console.error("Failed to generate markdown report");
+      }
+    } catch (error) {
+      console.error("Failed to download markdown:", error);
+    } finally {
+      setIsDownloading(null);
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!memory || isDownloading) return;
+    setIsDownloading('pdf');
+    try {
+      const response = await fetch("/api/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          memory,
+          analysis,
+          format: "pdf",
+          title: memory.overview?.slice(0, 50) || "Conversation Report"
+        })
+      });
+      
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "conversation-report.pdf";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      } else {
+        console.error("Failed to generate PDF report");
+      }
+    } catch (error) {
+      console.error("Failed to download PDF:", error);
+    } finally {
+      setIsDownloading(null);
+    }
+  };
 
   const selectStyle = {
     width: "100%",
@@ -109,6 +188,34 @@ export default function ExportPanel({
           >
             Download .txt
           </a>
+        )}
+
+        {memory && (
+          <>
+            <button
+              onClick={handleDownloadMarkdown}
+              disabled={isDownloading === 'markdown'}
+              className="rounded-md px-4 py-2 text-sm transition-colors disabled:opacity-50"
+              style={{ 
+                background: isDownloading === 'markdown' ? "var(--accent-muted)" : "var(--surface-border)", 
+                color: isDownloading === 'markdown' ? "var(--accent)" : "var(--text-secondary)" 
+              }}
+            >
+              {isDownloading === 'markdown' ? '⏳ Generating...' : '📄 Markdown Report'}
+            </button>
+
+            <button
+              onClick={handleDownloadPdf}
+              disabled={isDownloading === 'pdf'}
+              className="rounded-md px-4 py-2 text-sm transition-colors disabled:opacity-50"
+              style={{ 
+                background: isDownloading === 'pdf' ? "var(--accent-muted)" : "var(--surface-border)", 
+                color: isDownloading === 'pdf' ? "var(--accent)" : "var(--text-secondary)" 
+              }}
+            >
+              {isDownloading === 'pdf' ? '⏳ Generating...' : '📔 PDF Report'}
+            </button>
+          </>
         )}
       </div>
 
